@@ -1,0 +1,13 @@
+{
+  "name": "barow/ter_test",
+  "type": "typo3-cms-extension",
+  "description": "Ter Test Extension",
+  "require": {
+    "typo3/cms-core": "^12.4"
+  },
+  "autoload": {
+    "psr-4": {
+      "Barow\\TerTest\\": "Classes/"
+    }
+  }
+}
