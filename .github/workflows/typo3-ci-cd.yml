@@ -1,0 +1,92 @@
+name: TYPO3 CI/CD Pipeline
+
+on:
+  push:
+    branches:
+#      - main
+      - develop
+  pull_request:
+    branches:
+#      - main
+      - develop
+
+jobs:
+  build:
+    name: Install & Test
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1️⃣ Code auschecken
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      # 2️⃣ PHP-Version einrichten
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.1'
+          tools: composer
+
+      # 3️⃣ Composer-Abhängigkeiten installieren
+      - name: Install Composer Dependencies
+        run: composer install --no-progress --no-suggest --optimize-autoloader
+
+      # 4️⃣ TYPO3 Coding-Standards prüfen
+      - name: Run Code Style Check (typo3/coding-standards)
+        run: |
+          composer require --dev typo3/coding-standards
+          vendor/bin/typo3cs check src/
+
+      # 5️⃣ PHPUnit-Tests ausführen
+      - name: Run PHPUnit Tests
+        run: |
+          vendor/bin/phpunit --configuration phpunit.xml
+
+  deploy:
+    name: Deploy to Staging
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+      # 1️⃣ Code auschecken
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      # 2️⃣ SSH für Deployment einrichten
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H ${{ secrets.SERVER_IP }} >> ~/.ssh/known_hosts
+
+      # 3️⃣ Deployment auf Staging-Umgebung
+      - name: Deploy to Staging
+        run: |
+          ssh user@${{ secrets.SERVER_IP }} "cd /var/www/typo3 && git pull origin main && ./vendor/bin/typo3cms cache:flush"
+
+  production:
+    name: Deploy to Production
+    needs: deploy
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name == 'release'
+
+    steps:
+      # 1️⃣ Code auschecken
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      # 2️⃣ SSH für Deployment einrichten
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H ${{ secrets.PROD_SERVER_IP }} >> ~/.ssh/known_hosts
+
+      # 3️⃣ Deployment auf Produktionsumgebung
+      - name: Deploy to Production
+        run: |
+          ssh user@${{ secrets.PROD_SERVER_IP }} "cd /var/www/typo3 && git pull origin main && ./vendor/bin/typo3cms cache:flush"
+
